@@ -6,6 +6,7 @@ import '../../theme/colors.dart';
 import '../../theme/text_styles.dart';
 import '../../theme/button_styles.dart';
 import '../../theme/input_styles.dart';
+import 'yandex_map_address_screen.dart';
 
 class AddAddressScreen extends StatefulWidget {
   final String userId;
@@ -19,10 +20,11 @@ class AddAddressScreen extends StatefulWidget {
 class _AddAddressScreenState extends State<AddAddressScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
-  final _addressController = TextEditingController();
 
-  double _latitude = 55.7558;
-  double _longitude = 37.6173;
+  double _latitude = 0.0;
+  double _longitude = 0.0;
+  String _addressText = '';
+  bool _hasLocation = false;
 
   @override
   Widget build(BuildContext context) {
@@ -65,22 +67,6 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
                 },
               ),
               SizedBox(height: 16),
-              TextFormField(
-                controller: _addressController,
-                decoration: AppInputStyles.textField(
-                  labelText: 'Адрес',
-                  hintText: 'Введите полный адрес',
-                  prefixIcon: Icon(Icons.location_on, color: AppColors.primary),
-                ),
-                maxLines: 3,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Введите адрес';
-                  }
-                  return null;
-                },
-              ),
-              SizedBox(height: 16),
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -93,32 +79,67 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
                         children: [
                           Icon(Icons.map, color: AppColors.primary),
                           SizedBox(width: 8),
-                          Text('Координаты', style: AppTextStyles.bodyLarge),
+                          Text('Выбор адреса', style: AppTextStyles.bodyLarge),
                         ],
                       ),
                       SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Широта: ${_latitude.toStringAsFixed(6)}',
-                              style: AppTextStyles.bodyMedium,
+                      if (!_hasLocation)
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            style: AppButtonStyles.primaryButton,
+                            onPressed: _selectAddressOnMap,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.map, size: 20),
+                                SizedBox(width: 8),
+                                Text('Выбрать на карте'),
+                              ],
                             ),
                           ),
-                          Expanded(
-                            child: Text(
-                              'Долгота: ${_longitude.toStringAsFixed(6)}',
+                        )
+                      else
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Выбранный адрес:',
+                              style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              _addressText,
                               style: AppTextStyles.bodyMedium,
                             ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 12),
-                      Text(
-                        'Для демонстрации используются координаты Москвы. В реальном приложении здесь будет карта.',
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.secondary),
-                        textAlign: TextAlign.center,
-                      ),
+                            SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Широта: ${_latitude.toStringAsFixed(6)}',
+                                    style: AppTextStyles.bodySmall,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    'Долгота: ${_longitude.toStringAsFixed(6)}',
+                                    style: AppTextStyles.bodySmall,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed: _selectAddressOnMap,
+                                child: Text('Изменить адрес'),
+                              ),
+                            ),
+                          ],
+                        ),
                     ],
                   ),
                 ),
@@ -140,8 +161,33 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
     );
   }
 
+  void _selectAddressOnMap() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => YandexMapAddressScreen(
+          onAddressSelected: (lat, lng, address) {
+            setState(() {
+              _latitude = lat;
+              _longitude = lng;
+              _addressText = address;
+              _hasLocation = true;
+            });
+          },
+        ),
+      ),
+    );
+  }
+
   void _saveAddress() async {
     if (_formKey.currentState!.validate()) {
+      if (!_hasLocation) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Пожалуйста, выберите адрес на карте')),
+        );
+        return;
+      }
+
       final addressService = Provider.of<AddressService>(context, listen: false);
 
       final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
@@ -152,7 +198,7 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
         title: _titleController.text,
         latitude: _latitude,
         longitude: _longitude,
-        addressText: _addressController.text,
+        addressText: _addressText,
         createdAt: DateTime.now(),
       );
 
@@ -174,7 +220,6 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
   @override
   void dispose() {
     _titleController.dispose();
-    _addressController.dispose();
     super.dispose();
   }
 }

@@ -13,7 +13,7 @@ class MainMenu extends StatelessWidget {
       body: Column(
         children: [
           _buildHeader(),
-          Expanded(
+          Expanded( // ДОБАВЬ Expanded здесь
             child: _buildMenuContent(context),
           ),
         ],
@@ -62,7 +62,7 @@ class MainMenu extends StatelessWidget {
   }
 
   Widget _buildMenuContent(BuildContext context) {
-    return Padding(
+    return SingleChildScrollView( // ИЗМЕНИ на SingleChildScrollView
       padding: EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -103,7 +103,7 @@ class MainMenu extends StatelessWidget {
             subtitle: 'Информация и инструкции',
             onTap: () {},
           ),
-          Spacer(),
+          SizedBox(height: 32), // УВЕЛИЧЬ отступ
           ElevatedButton(
             style: AppButtonStyles.secondaryButton,
             onPressed: () {

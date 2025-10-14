@@ -13,7 +13,7 @@ import 'theme/colors.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  try {
+
     await DatabaseService.initialize();
 
     runApp(
@@ -26,10 +26,6 @@ void main() async {
         child: MyApp(),
       ),
     );
-  } catch (e) {
-    print('Ошибка инициализации приложения: $e');
-    runApp(ErrorApp(error: e.toString()));
-  }
 }
 
 class MyApp extends StatelessWidget {

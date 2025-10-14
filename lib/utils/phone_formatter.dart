@@ -28,7 +28,6 @@ class PhoneFormatter {
   }
 
   static String cleanPhone(String formattedPhone) {
-    // Удаляем все нецифровые символы и приводим к формату 79XXXXXXXXX
     String digits = formattedPhone.replaceAll(RegExp(r'[^\d]'), '');
 
     if (digits.startsWith('7') || digits.startsWith('8')) {
