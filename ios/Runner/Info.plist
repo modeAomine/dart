@@ -1,0 +1,5 @@
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>Для показа вашего местоположения на карте</string>
+
+<key>YandexMapKitApiKey</key>
+<string>YOUR_YANDEX_MAPS_API_KEY</string>

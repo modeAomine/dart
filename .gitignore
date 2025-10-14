@@ -1,0 +1,12 @@
+docker-compose.yml
+.dart_tool
+.idea
+build
+database
+.flutter-plugins-dependencies
+.metadata
+test
+trash_removal_app.iml
+.env
+analysis_options.yaml
+pubspec.lock
