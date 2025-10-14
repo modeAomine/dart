@@ -18,6 +18,7 @@ dependencies:
   postgres: ^2.4.0
   yandex_mapkit: ^4.2.1
   geolocator: ^9.0.2
+  location: ^8.0.1
 
 dev_dependencies:
   flutter_test:

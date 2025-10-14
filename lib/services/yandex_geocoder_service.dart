@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 class YandexGeocoderService {
   static const String _apiKey = '689c442f-2649-40ba-9ac0-7be5df360fc9';
   static const String _baseUrl = 'https://geocode-maps.yandex.ru/1.x'; // ← ИСПРАВЬ URL
+  static const String _suggestUrl = 'https://suggest-maps.yandex.ru/v1/suggest';
 
   static Future<List<Map<String, dynamic>>> searchAddress(String query) async {
     final url = '$_baseUrl?format=json&geocode=$query&apikey=$_apiKey&lang=ru_RU&results=10';
@@ -54,5 +55,80 @@ class YandexGeocoderService {
       print('Error reverse geocoding: $e');
     }
     return null;
+  }
+
+  static Future<List<Map<String, dynamic>>> getSuggestions(String query) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_suggestUrl?apikey=$_apiKey&text=$query&types=locality,street,house&lang=ru_RU'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<dynamic> results = data['results'] ?? [];
+
+        return results.map<Map<String, dynamic>>((item) {
+          return {
+            'title': item['title']?['text'] ?? '',
+            'subtitle': item['subtitle']?['text'] ?? '',
+            'latitude': item['position']?['lat'],
+            'longitude': item['position']?['lon'],
+          };
+        }).toList();
+      }
+    } catch (e) {
+      print('Ошибка получения подсказок: $e');
+    }
+
+    return [];
+  }
+
+  static Future<List<Map<String, dynamic>>> getCitySuggestions(String query) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_suggestUrl?apikey=$_apiKey&text=$query&types=locality&lang=ru_RU'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<dynamic> results = data['results'] ?? [];
+
+        return results.map<Map<String, dynamic>>((item) {
+          return {
+            'title': item['title']?['text'] ?? '',
+            'subtitle': item['subtitle']?['text'] ?? '',
+          };
+        }).toList();
+      }
+    } catch (e) {
+      print('Ошибка поиска городов: $e');
+    }
+
+    return [];
+  }
+
+  static Future<List<Map<String, dynamic>>> getStreetSuggestions(String city, String street) async {
+    try {
+      final query = '$city $street';
+      final response = await http.get(
+        Uri.parse('$_suggestUrl?apikey=$_apiKey&text=$query&types=street&lang=ru_RU'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<dynamic> results = data['results'] ?? [];
+
+        return results.map<Map<String, dynamic>>((item) {
+          return {
+            'title': item['title']?['text'] ?? '',
+            'subtitle': item['subtitle']?['text'] ?? '',
+          };
+        }).toList();
+      }
+    } catch (e) {
+      print('Ошибка поиска улиц: $e');
+    }
+
+    return [];
   }
 }

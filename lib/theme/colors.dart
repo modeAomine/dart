@@ -13,4 +13,10 @@ class AppColors {
   static const Color onBackground = Color(0xFF000000);
   static const Color onSurface = Color(0xFF000000);
   static const Color onError = Color(0xFFFFFFFF);
+
+  static const Color outline = Color(0xFFC6C6C8);
+  static const Color success = Color(0xFF34C759);
+
+  static const Color textPrimary = Color(0xFF000000);
+  static const Color textSecondary = Color(0xFF8E8E93);
 }

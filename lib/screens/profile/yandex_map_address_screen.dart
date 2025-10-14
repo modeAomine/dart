@@ -1,12 +1,9 @@
-import 'dart:typed_data';
-import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:location/location.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart';
 import '../../services/yandex_geocoder_service.dart';
 import '../../theme/colors.dart';
 import '../../theme/text_styles.dart';
-import '../../theme/button_styles.dart';
 
 class YandexMapAddressScreen extends StatefulWidget {
   final Function(double, double, String) onAddressSelected;
@@ -23,13 +20,30 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
   Point? selectedPoint;
   String? selectedAddress;
   bool isLoading = false;
+  double currentZoom = 10.0;
+  final Location _location = Location();
+
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _searchFocusNode.addListener(_onSearchFocusChange);
+  }
+
+  void _onSearchFocusChange() {
+    if (!_searchFocusNode.hasFocus) {
+      setState(() {});
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('Выберите адрес на карте'),
+        title: Text('Выберите адрес'),
         backgroundColor: AppColors.primary,
         foregroundColor: AppColors.onPrimary,
         actions: [
@@ -42,6 +56,7 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
       body: Column(
         children: [
           _buildSearchBar(),
+          _buildZoomSlider(),
           Expanded(
             child: Stack(
               children: [
@@ -52,6 +67,13 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
                   },
                   mapObjects: mapObjects,
                   onMapTap: (Point point) => _onMapTapped(point),
+                  onCameraPositionChanged: (cameraPosition, reason, finished) {
+                    if (finished) {
+                      setState(() {
+                        currentZoom = cameraPosition.zoom;
+                      });
+                    }
+                  },
                 ),
                 Center(
                   child: Icon(
@@ -83,17 +105,7 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Future<void> _moveToInitialPosition() async {
-    await mapController!.moveCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: Point(latitude: 55.7558, longitude: 37.6173),
-          zoom: 10,
-        ),
-      ),
+      floatingActionButton: _buildFloatingActionButton(),
     );
   }
 
@@ -111,19 +123,50 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
           ),
         ],
       ),
+      child: TextField(
+        controller: _searchController,
+        focusNode: _searchFocusNode,
+        decoration: InputDecoration(
+          hintText: 'Введите адрес...',
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          prefixIcon: Icon(Icons.search, color: AppColors.primary),
+          suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
+            icon: Icon(Icons.clear),
+            onPressed: () {
+              _searchController.clear();
+              setState(() {});
+            },
+          )
+              : null,
+        ),
+        onSubmitted: _searchAddress,
+      ),
+    );
+  }
+
+  Widget _buildZoomSlider() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
+          Icon(Icons.zoom_out, color: AppColors.primary),
           Expanded(
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Введите адрес...',
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                prefixIcon: Icon(Icons.search, color: AppColors.primary),
-              ),
-              onSubmitted: _searchAddress,
+            child: Slider(
+              value: currentZoom,
+              min: 2.0,
+              max: 20.0,
+              divisions: 18,
+              onChanged: (value) {
+                setState(() {
+                  currentZoom = value;
+                });
+                _updateZoom(value);
+              },
             ),
           ),
+          Icon(Icons.zoom_in, color: AppColors.primary),
         ],
       ),
     );
@@ -147,32 +190,19 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
               selectedAddress ?? 'Адрес не определен',
               style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600),
             ),
-            SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => setState(() {
-                      selectedPoint = null;
-                      selectedAddress = null;
-                      _clearMapObjects();
-                    }),
-                    child: Text('Отмена'),
-                  ),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    style: AppButtonStyles.primaryButton,
-                    onPressed: _saveAddress,
-                    child: Text('Выбрать'),
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildFloatingActionButton() {
+    return FloatingActionButton.extended(
+      onPressed: _confirmAddress,
+      backgroundColor: AppColors.primary,
+      foregroundColor: AppColors.onPrimary,
+      icon: Icon(Icons.check),
+      label: Text('Готово'),
     );
   }
 
@@ -187,24 +217,12 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
       final results = await YandexGeocoderService.searchAddress(query);
       if (results.isNotEmpty) {
         final firstResult = results.first;
-        final point = Point(
-          latitude: firstResult['latitude'],
-          longitude: firstResult['longitude'],
-        );
-
-        setState(() {
-          selectedPoint = point;
-          selectedAddress = firstResult['full_address'];
-          _updateMapMarker(point);
-        });
-
-        await mapController!.moveCamera(
-          CameraUpdate.newCameraPosition(
-            CameraPosition(
-              target: point,
-              zoom: 16,
-            ),
+        await _moveToPointWithAddress(
+          Point(
+            latitude: firstResult['latitude'],
+            longitude: firstResult['longitude'],
           ),
+          firstResult['full_address'],
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -220,6 +238,46 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
         isLoading = false;
       });
     }
+  }
+
+  Future<void> _moveToPointWithAddress(Point point, String address) async {
+    setState(() {
+      selectedPoint = point;
+      selectedAddress = address;
+      _updateMapMarker(point);
+    });
+
+    await mapController!.moveCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: point,
+          zoom: 16,
+        ),
+      ),
+    );
+  }
+
+  void _updateZoom(double zoom) async {
+    final currentPosition = await mapController!.getCameraPosition();
+    await mapController!.moveCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: currentPosition.target,
+          zoom: zoom,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _moveToInitialPosition() async {
+    await mapController!.moveCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: Point(latitude: 55.7558, longitude: 37.6173),
+          zoom: currentZoom,
+        ),
+      ),
+    );
   }
 
   void _onMapTapped(Point point) async {
@@ -253,26 +311,19 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
 
   void _updateMapMarker(Point point) {
     _clearMapObjects();
-    const assetName = 'assets/location_pin.png';
     setState(() {
       mapObjects.add(PlacemarkMapObject(
         mapId: MapObjectId('selected_location'),
         point: point,
         opacity: 1,
         isDraggable: false,
-        icon: PlacemarkIcon.single(PlacemarkIconStyle(
-          image: BitmapDescriptor.fromAssetImage(
-            assetName,
-          ),
-          scale: 1.0,
-        )),
       ));
     });
   }
 
   void _clearMapObjects() {
     setState(() {
-      mapObjects.clear();
+      mapObjects.removeWhere((obj) => obj.mapId.value == 'selected_location');
     });
   }
 
@@ -282,7 +333,33 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
     });
 
     try {
-      final point = Point(latitude: 55.7558, longitude: 37.6173);
+      bool serviceEnabled = await _location.serviceEnabled();
+      if (!serviceEnabled) {
+        serviceEnabled = await _location.requestService();
+        if (!serviceEnabled) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Сервис геолокации отключен')),
+          );
+          return;
+        }
+      }
+
+      PermissionStatus permissionGranted = await _location.hasPermission();
+      if (permissionGranted == PermissionStatus.denied) {
+        permissionGranted = await _location.requestPermission();
+        if (permissionGranted != PermissionStatus.granted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Разрешение на геолокацию не предоставлено')),
+          );
+          return;
+        }
+      }
+
+      final locationData = await _location.getLocation();
+      final point = Point(
+        latitude: locationData.latitude ?? 55.7558,
+        longitude: locationData.longitude ?? 37.6173,
+      );
 
       final address = await YandexGeocoderService.reverseGeocode(
         point.latitude,
@@ -291,7 +368,7 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
 
       setState(() {
         selectedPoint = point;
-        selectedAddress = address?['address'] ?? 'Москва, Красная площадь';
+        selectedAddress = address?['address'] ?? 'Текущее местоположение';
         _updateMapMarker(point);
       });
 
@@ -306,7 +383,7 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
 
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка перемещения к местоположению: $e')),
+        SnackBar(content: Text('Ошибка получения местоположения: $e')),
       );
     } finally {
       setState(() {
@@ -315,7 +392,7 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
     }
   }
 
-  void _saveAddress() {
+  void _confirmAddress() {
     if (selectedPoint != null && selectedAddress != null) {
       widget.onAddressSelected(
         selectedPoint!.latitude,
@@ -333,6 +410,8 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
   @override
   void dispose() {
     mapController?.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 }
