@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:location/location.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart';
 import '../../services/yandex_geocoder_service.dart';
+import '../../services/network_service.dart';
 import '../../theme/colors.dart';
 import '../../theme/text_styles.dart';
+import '../../widgets/network_status_banner.dart';
 
 class YandexMapAddressScreen extends StatefulWidget {
   final Function(double, double, String) onAddressSelected;
@@ -40,6 +43,8 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final networkService = Provider.of<NetworkService>(context);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -49,13 +54,16 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
         actions: [
           IconButton(
             icon: Icon(Icons.my_location),
-            onPressed: _moveToCurrentLocation,
+            onPressed: networkService.isConnected ? _moveToCurrentLocation : null,
           ),
         ],
       ),
       body: Column(
         children: [
-          _buildSearchBar(),
+          // Баннер сети
+          if (!networkService.isConnected) NetworkStatusBanner(),
+
+          _buildSearchBar(networkService.isConnected),
           _buildZoomSlider(),
           Expanded(
             child: Stack(
@@ -66,7 +74,7 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
                     await _moveToInitialPosition();
                   },
                   mapObjects: mapObjects,
-                  onMapTap: (Point point) => _onMapTapped(point),
+                  onMapTap: networkService.isConnected ? _onMapTapped : null,
                   onCameraPositionChanged: (cameraPosition, reason, finished) {
                     if (finished) {
                       setState(() {
@@ -100,16 +108,47 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
                       ),
                     ),
                   ),
+                // Сообщение при отсутствии сети
+                if (!networkService.isConnected)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black54,
+                      child: Center(
+                        child: Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.wifi_off, size: 50, color: AppColors.secondary),
+                                SizedBox(height: 16),
+                                Text(
+                                  'Карта недоступна',
+                                  style: AppTextStyles.headerSmall,
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Для работы карты требуется подключение к интернету',
+                                  textAlign: TextAlign.center,
+                                  style: AppTextStyles.bodyMedium,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
         ],
       ),
-      floatingActionButton: _buildFloatingActionButton(),
+      floatingActionButton: networkService.isConnected ? _buildFloatingActionButton() : null,
     );
   }
 
-  Widget _buildSearchBar() {
+  Widget _buildSearchBar(bool isConnected) {
     return Container(
       margin: EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -126,12 +165,14 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
       child: TextField(
         controller: _searchController,
         focusNode: _searchFocusNode,
+        enabled: isConnected,
         decoration: InputDecoration(
-          hintText: 'Введите адрес...',
+          hintText: isConnected ? 'Введите адрес...' : 'Поиск недоступен',
           border: InputBorder.none,
           contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          prefixIcon: Icon(Icons.search, color: AppColors.primary),
-          suffixIcon: _searchController.text.isNotEmpty
+          prefixIcon: Icon(Icons.search,
+              color: isConnected ? AppColors.primary : AppColors.secondary),
+          suffixIcon: _searchController.text.isNotEmpty && isConnected
               ? IconButton(
             icon: Icon(Icons.clear),
             onPressed: () {
@@ -141,32 +182,36 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
           )
               : null,
         ),
-        onSubmitted: _searchAddress,
+        onSubmitted: isConnected ? _searchAddress : null,
       ),
     );
   }
 
   Widget _buildZoomSlider() {
+    final networkService = Provider.of<NetworkService>(context);
+
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          Icon(Icons.zoom_out, color: AppColors.primary),
+          Icon(Icons.zoom_out,
+              color: networkService.isConnected ? AppColors.primary : AppColors.secondary),
           Expanded(
             child: Slider(
               value: currentZoom,
               min: 2.0,
               max: 20.0,
               divisions: 18,
-              onChanged: (value) {
+              onChanged: networkService.isConnected ? (value) {
                 setState(() {
                   currentZoom = value;
                 });
                 _updateZoom(value);
-              },
+              } : null,
             ),
           ),
-          Icon(Icons.zoom_in, color: AppColors.primary),
+          Icon(Icons.zoom_in,
+              color: networkService.isConnected ? AppColors.primary : AppColors.secondary),
         ],
       ),
     );
@@ -208,6 +253,9 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
 
   void _searchAddress(String query) async {
     if (query.isEmpty) return;
+
+    final networkService = Provider.of<NetworkService>(context, listen: false);
+    if (!networkService.isConnected) return;
 
     setState(() {
       isLoading = true;
@@ -281,6 +329,9 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
   }
 
   void _onMapTapped(Point point) async {
+    final networkService = Provider.of<NetworkService>(context, listen: false);
+    if (!networkService.isConnected) return;
+
     setState(() {
       isLoading = true;
     });
@@ -328,6 +379,9 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
   }
 
   void _moveToCurrentLocation() async {
+    final networkService = Provider.of<NetworkService>(context, listen: false);
+    if (!networkService.isConnected) return;
+
     setState(() {
       isLoading = true;
     });

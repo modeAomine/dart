@@ -7,7 +7,8 @@ import '../../services/address_service.dart';
 import '../../theme/colors.dart';
 import '../../theme/text_styles.dart';
 import '../../theme/button_styles.dart';
-import 'add_address_screen.dart';
+import '../addresses/add_address_screen.dart';
+import '../../widgets/base_scaffold.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -24,8 +25,7 @@ class ProfileScreen extends StatelessWidget {
       });
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
+    return BaseScaffold(
       appBar: AppBar(
         title: Text('Профиль'),
         backgroundColor: AppColors.primary,
@@ -62,32 +62,17 @@ class ProfileScreen extends StatelessWidget {
                 Container(
                   width: 60,
                   height: 60,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.person,
-                    color: AppColors.onPrimary,
-                    size: 30,
-                  ),
+                  decoration: BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                  child: Icon(Icons.person, color: AppColors.onPrimary, size: 30),
                 ),
                 SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        user.name,
-                        style: AppTextStyles.headerMedium,
-                      ),
+                      Text(user.name, style: AppTextStyles.headerMedium),
                       SizedBox(height: 4),
-                      Text(
-                        '+7 ${user.phone}',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.secondary,
-                        ),
-                      ),
+                      Text('+7 ${user.phone}', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.secondary)),
                     ],
                   ),
                 ),
@@ -100,12 +85,7 @@ class ProfileScreen extends StatelessWidget {
               children: [
                 Icon(Icons.calendar_today, size: 20, color: AppColors.primary),
                 SizedBox(width: 12),
-                Text(
-                  'Зарегистрирован:',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.secondary,
-                  ),
-                ),
+                Text('Зарегистрирован:', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.secondary)),
                 Spacer(),
                 Text(
                   '${user.createdAt.day.toString().padLeft(2, '0')}.${user.createdAt.month.toString().padLeft(2, '0')}.${user.createdAt.year}',
@@ -132,10 +112,7 @@ class ProfileScreen extends StatelessWidget {
               children: [
                 Icon(Icons.location_on, color: AppColors.primary),
                 SizedBox(width: 8),
-                Text(
-                  'Мои адреса',
-                  style: AppTextStyles.headerSmall,
-                ),
+                Text('Мои адреса', style: AppTextStyles.headerSmall),
               ],
             ),
             SizedBox(height: 16),
@@ -151,14 +128,7 @@ class ProfileScreen extends StatelessWidget {
               height: 50,
               child: ElevatedButton(
                 style: AppButtonStyles.primaryButton,
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => AddAddressScreen(userId: userId),
-                    ),
-                  );
-                },
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddAddressScreen(userId: userId))),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -178,24 +148,14 @@ class ProfileScreen extends StatelessWidget {
   Widget _buildEmptyAddresses() {
     return Container(
       padding: EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(12),
-      ),
+      decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(12)),
       child: Column(
         children: [
           Icon(Icons.location_off, size: 50, color: AppColors.secondary),
           SizedBox(height: 12),
-          Text(
-            'Адреса не добавлены',
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.secondary),
-          ),
+          Text('Адреса не добавлены', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.secondary)),
           SizedBox(height: 8),
-          Text(
-            'Добавьте адрес для заказа вывоза мусора',
-            style: AppTextStyles.bodySmall,
-            textAlign: TextAlign.center,
-          ),
+          Text('Добавьте адрес для заказа вывоза мусора', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
         ],
       ),
     );
@@ -226,12 +186,7 @@ class ProfileScreen extends StatelessWidget {
               children: [
                 Icon(Icons.home, size: 20, color: AppColors.primary),
                 SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    address.title,
-                    style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ),
+                Expanded(child: Text(address.title, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600))),
                 IconButton(
                   icon: Icon(Icons.delete, size: 20, color: AppColors.error),
                   onPressed: () => _showDeleteDialog(context, address, addressService, userId),
@@ -239,10 +194,7 @@ class ProfileScreen extends StatelessWidget {
               ],
             ),
             SizedBox(height: 8),
-            Text(
-              address.addressText,
-              style: AppTextStyles.bodyMedium,
-            ),
+            Text(address.addressText, style: AppTextStyles.bodyMedium),
             SizedBox(height: 8),
             Text(
               'Добавлен: ${address.createdAt.day.toString().padLeft(2, '0')}.${address.createdAt.month.toString().padLeft(2, '0')}.${address.createdAt.year}',
@@ -261,22 +213,15 @@ class ProfileScreen extends StatelessWidget {
         title: Text('Удалить адрес?'),
         content: Text('Вы уверены, что хотите удалить адрес "${address.title}"?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Отмена'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Отмена')),
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
               final success = await addressService.deleteAddress(address.id, userId);
               if (success) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Адрес удален')),
-                );
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Адрес удален')));
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Ошибка при удалении адреса')),
-                );
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка при удалении адреса')));
               }
             },
             child: Text('Удалить', style: TextStyle(color: AppColors.error)),

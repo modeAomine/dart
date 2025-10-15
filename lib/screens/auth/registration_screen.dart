@@ -8,6 +8,8 @@ import '../../theme/button_styles.dart';
 import '../../theme/input_styles.dart';
 import '../../utils/phone_formatter.dart';
 import '../../widgets/phone_text_field.dart';
+import '../../widgets/base_scaffold.dart';
+import '../main_menu.dart';
 
 class RegistrationScreen extends StatefulWidget {
   @override
@@ -26,8 +28,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     final authService = Provider.of<AuthService>(context);
     final registrationService = Provider.of<RegistrationService>(context);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
+    return BaseScaffold(
       body: authService.isLoading || registrationService.isLoading
           ? Center(child: CircularProgressIndicator(color: AppColors.primary))
           : SingleChildScrollView(
@@ -55,30 +56,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           decoration: BoxDecoration(
             color: AppColors.primary,
             shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black26,
-                blurRadius: 8,
-                offset: Offset(0, 4),
-              ),
-            ],
           ),
-          child: Icon(
-            Icons.person_add,
-            size: 40,
-            color: AppColors.onPrimary,
-          ),
+          child: Icon(Icons.person_add, size: 40, color: AppColors.onPrimary),
         ),
         SizedBox(height: 20),
-        Text(
-          'Регистрация',
-          style: AppTextStyles.headerLarge.copyWith(color: AppColors.primary),
-        ),
+        Text('Регистрация', style: AppTextStyles.headerLarge.copyWith(color: AppColors.primary)),
         SizedBox(height: 8),
-        Text(
-          'Создайте новый аккаунт',
-          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.secondary),
-        ),
+        Text('Создайте новый аккаунт', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.secondary)),
       ],
     );
   }
@@ -94,18 +78,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               labelText: 'Имя',
               prefixIcon: Icon(Icons.person, color: AppColors.primary),
             ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Введите имя';
-              }
-              return null;
-            },
+            validator: (value) => value == null || value.isEmpty ? 'Введите имя' : null,
           ),
           SizedBox(height: 16),
-          PhoneTextField(
-            controller: _phoneController,
-            labelText: 'Номер телефона',
-          ),
+          PhoneTextField(controller: _phoneController, labelText: 'Номер телефона'),
           SizedBox(height: 16),
           TextFormField(
             controller: _passwordController,
@@ -115,12 +91,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             ),
             obscureText: true,
             validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Введите пароль';
-              }
-              if (value.length < 6) {
-                return 'Пароль должен быть не менее 6 символов';
-              }
+              if (value == null || value.isEmpty) return 'Введите пароль';
+              if (value.length < 6) return 'Пароль должен быть не менее 6 символов';
               return null;
             },
           ),
@@ -133,12 +105,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             ),
             obscureText: true,
             validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Подтвердите пароль';
-              }
-              if (value != _passwordController.text) {
-                return 'Пароли не совпадают';
-              }
+              if (value == null || value.isEmpty) return 'Подтвердите пароль';
+              if (value != _passwordController.text) return 'Пароли не совпадают';
               return null;
             },
           ),
@@ -148,60 +116,53 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             height: 54,
             child: ElevatedButton(
               style: AppButtonStyles.primaryButton,
-              onPressed: () async {
-                if (_formKey.currentState!.validate()) {
-                  final registrationService = Provider.of<RegistrationService>(context, listen: false);
-                  final authService = Provider.of<AuthService>(context, listen: false);
-
-                  // Очищаем номер от форматирования перед отправкой
-                  final cleanPhone = PhoneFormatter.cleanPhone(_phoneController.text);
-
-                  final success = await registrationService.registerUser(
-                    cleanPhone.substring(1), // убираем 7 для базы данных
-                    _passwordController.text,
-                    _nameController.text,
-                  );
-
-                  if (success) {
-                    final loginSuccess = await authService.loginWithPhone(
-                      cleanPhone.substring(1),
-                      _passwordController.text,
-                    );
-
-                    if (loginSuccess) {
-                      Navigator.pushReplacementNamed(context, '/main');
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Ошибка автоматического входа'),
-                          backgroundColor: AppColors.error,
-                        ),
-                      );
-                    }
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Ошибка регистрации. Возможно телефон уже занят'),
-                        backgroundColor: AppColors.error,
-                      ),
-                    );
-                  }
-                }
-              },
+              onPressed: () => _performRegistration(context),
               child: Text('Зарегистрироваться'),
             ),
           ),
           SizedBox(height: 20),
           TextButton(
             style: AppButtonStyles.textButton,
-            onPressed: () {
-              Navigator.pushReplacementNamed(context, '/login');
-            },
+            onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
             child: Text('Уже есть аккаунт? Войдите'),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _performRegistration(BuildContext context) async {
+    if (_formKey.currentState!.validate()) {
+      final registrationService = Provider.of<RegistrationService>(context, listen: false);
+      final authService = Provider.of<AuthService>(context, listen: false);
+
+      final cleanPhone = PhoneFormatter.cleanPhone(_phoneController.text);
+
+      final success = await registrationService.registerUser(
+        cleanPhone.substring(1),
+        _passwordController.text,
+        _nameController.text,
+      );
+
+      if (success) {
+        final loginSuccess = await authService.loginWithPhone(
+          cleanPhone.substring(1),
+          _passwordController.text,
+        );
+
+        if (loginSuccess) {
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => MainMenu()));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка автоматического входа'), backgroundColor: AppColors.error),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка регистрации. Возможно телефон уже занят'), backgroundColor: AppColors.error),
+        );
+      }
+    }
   }
 
   @override
