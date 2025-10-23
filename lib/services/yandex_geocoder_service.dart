@@ -3,33 +3,48 @@ import 'package:http/http.dart' as http;
 
 class YandexGeocoderService {
   static const String _apiKey = '689c442f-2649-40ba-9ac0-7be5df360fc9';
-  static const String _baseUrl = 'https://geocode-maps.yandex.ru/1.x'; // ← ИСПРАВЬ URL
-  static const String _suggestUrl = 'https://suggest-maps.yandex.ru/v1/suggest';
+  static const String _baseUrl = 'https://geocode-maps.yandex.ru/1.x';
 
   static Future<List<Map<String, dynamic>>> searchAddress(String query) async {
-    final url = '$_baseUrl?format=json&geocode=$query&apikey=$_apiKey&lang=ru_RU&results=10';
+    final encodedQuery = Uri.encodeComponent(query);
+    final url = '$_baseUrl?format=json&geocode=$encodedQuery&apikey=$_apiKey&lang=ru_RU&results=10';
 
     try {
+      print('🔍 Search URL: $url');
       final response = await http.get(Uri.parse(url));
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final featureMembers = data['response']['GeoObjectCollection']['featureMember'] as List;
+        print('✅ Search response received');
+
+        final featureMembers = data['response']['GeoObjectCollection']['featureMember'] as List? ?? [];
+
+        if (featureMembers.isEmpty) {
+          print('⚠️ No results found for query: $query');
+          return [];
+        }
 
         return featureMembers.map((member) {
           final geoObject = member['GeoObject'];
           final point = geoObject['Point']['pos'].split(' ');
 
-          return {
-            'name': geoObject['name'],
+          final result = {
+            'name': geoObject['name'] ?? '',
             'description': geoObject['description'] ?? '',
-            'full_address': geoObject['metaDataProperty']['GeocoderMetaData']['text'],
+            'full_address': geoObject['metaDataProperty']['GeocoderMetaData']['text'] ?? '',
             'latitude': double.parse(point[1]),
             'longitude': double.parse(point[0]),
           };
+
+          print('📍 Found: ${result['full_address']}');
+          return result;
         }).toList();
+      } else {
+        print('❌ Search HTTP error: ${response.statusCode}');
+        print('Response: ${response.body}');
       }
     } catch (e) {
-      print('Error searching address: $e');
+      print('❌ Search error: $e');
     }
     return [];
   }
@@ -38,97 +53,80 @@ class YandexGeocoderService {
     final url = '$_baseUrl?format=json&geocode=$lon,$lat&apikey=$_apiKey&lang=ru_RU';
 
     try {
+      print('🗺️ Reverse geocode URL: $url');
       final response = await http.get(Uri.parse(url));
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final featureMembers = data['response']['GeoObjectCollection']['featureMember'] as List;
+        print('✅ Reverse geocode response received');
+
+        final featureMembers = data['response']['GeoObjectCollection']['featureMember'] as List? ?? [];
 
         if (featureMembers.isNotEmpty) {
           final geoObject = featureMembers.first['GeoObject'];
+          final metaData = geoObject['metaDataProperty']['GeocoderMetaData'];
+          final address = metaData['text'] ?? 'Адрес не определен';
+
+          print('🎯 Reverse geocode SUCCESS: $address');
           return {
-            'address': geoObject['metaDataProperty']['GeocoderMetaData']['text'],
-            'name': geoObject['name'],
+            'address': address,
+            'name': geoObject['name'] ?? '',
+            'full_address': address,
+          };
+        } else {
+          print('⚠️ No address found for coordinates: $lat, $lon');
+        }
+      } else {
+        print('❌ Reverse geocode HTTP error: ${response.statusCode}');
+        print('Response: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Reverse geocode error: $e');
+    }
+
+    // Fallback если все провалилось
+    final fallbackAddress = 'Координаты: ${lat.toStringAsFixed(6)}, ${lon.toStringAsFixed(6)}';
+    print('🔄 Using fallback address: $fallbackAddress');
+    return {
+      'address': fallbackAddress,
+      'name': 'Местоположение',
+      'full_address': fallbackAddress,
+    };
+  }
+
+  // Альтернативный метод - используем другой endpoint
+  static Future<Map<String, dynamic>?> reverseGeocodeAlternative(double lat, double lon) async {
+    final url = 'https://geocode-maps.yandex.ru/1.x/?format=json&geocode=$lon,$lat&apikey=$_apiKey&lang=ru_RU&kind=house';
+
+    try {
+      print('🗺️ Alternative reverse geocode URL: $url');
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('✅ Alternative reverse geocode response received');
+
+        final collection = data['response']['GeoObjectCollection'];
+        final featureMembers = collection['featureMember'] as List? ?? [];
+
+        if (featureMembers.isNotEmpty) {
+          final geoObject = featureMembers.first['GeoObject'];
+          final address = geoObject['name'] ?? 'Адрес не определен';
+          final description = geoObject['description'] ?? '';
+
+          final fullAddress = description.isNotEmpty ? '$address, $description' : address;
+
+          print('🎯 Alternative reverse geocode SUCCESS: $fullAddress');
+          return {
+            'address': fullAddress,
+            'name': address,
+            'full_address': fullAddress,
           };
         }
       }
     } catch (e) {
-      print('Error reverse geocoding: $e');
+      print('❌ Alternative reverse geocode error: $e');
     }
     return null;
-  }
-
-  static Future<List<Map<String, dynamic>>> getSuggestions(String query) async {
-    try {
-      final response = await http.get(
-        Uri.parse('$_suggestUrl?apikey=$_apiKey&text=$query&types=locality,street,house&lang=ru_RU'),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List<dynamic> results = data['results'] ?? [];
-
-        return results.map<Map<String, dynamic>>((item) {
-          return {
-            'title': item['title']?['text'] ?? '',
-            'subtitle': item['subtitle']?['text'] ?? '',
-            'latitude': item['position']?['lat'],
-            'longitude': item['position']?['lon'],
-          };
-        }).toList();
-      }
-    } catch (e) {
-      print('Ошибка получения подсказок: $e');
-    }
-
-    return [];
-  }
-
-  static Future<List<Map<String, dynamic>>> getCitySuggestions(String query) async {
-    try {
-      final response = await http.get(
-        Uri.parse('$_suggestUrl?apikey=$_apiKey&text=$query&types=locality&lang=ru_RU'),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List<dynamic> results = data['results'] ?? [];
-
-        return results.map<Map<String, dynamic>>((item) {
-          return {
-            'title': item['title']?['text'] ?? '',
-            'subtitle': item['subtitle']?['text'] ?? '',
-          };
-        }).toList();
-      }
-    } catch (e) {
-      print('Ошибка поиска городов: $e');
-    }
-
-    return [];
-  }
-
-  static Future<List<Map<String, dynamic>>> getStreetSuggestions(String city, String street) async {
-    try {
-      final query = '$city $street';
-      final response = await http.get(
-        Uri.parse('$_suggestUrl?apikey=$_apiKey&text=$query&types=street&lang=ru_RU'),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List<dynamic> results = data['results'] ?? [];
-
-        return results.map<Map<String, dynamic>>((item) {
-          return {
-            'title': item['title']?['text'] ?? '',
-            'subtitle': item['subtitle']?['text'] ?? '',
-          };
-        }).toList();
-      }
-    } catch (e) {
-      print('Ошибка поиска улиц: $e');
-    }
-
-    return [];
   }
 }

@@ -43,7 +43,7 @@ class AuthService with ChangeNotifier {
     notifyListeners();
 
     try {
-      final isDbAlive = await DatabaseService.isConnectionAlive();
+      final isDbAlive = await DatabaseService.isAvailable;
       if (!isDbAlive) {
         throw AppError('Нет подключения к базе данных', type: ErrorType.database);
       }
@@ -51,21 +51,19 @@ class AuthService with ChangeNotifier {
       final connection = await DatabaseService.connection;
 
       final result = await connection.query(
-        'SELECT id, phone, name, created_at, updated_at FROM users WHERE phone = @phone AND password_hash = @password',
-        substitutionValues: {
-          'phone': phone,
-          'password': _hashPassword(password),
-        },
+          'SELECT id, phone, name, created_at, updated_at FROM users WHERE phone = ? AND password_hash = ?',
+          [phone, _hashPassword(password)]
       );
 
       if (result.isNotEmpty) {
         final row = result.first;
+        final fields = row.fields;
         _currentUser = User(
-          id: row[0] as String,
-          phone: row[1] as String,
-          name: row[2] as String,
-          createdAt: row[3] as DateTime,
-          updatedAt: row[4] as DateTime?,
+          id: fields['id']?.toString(),
+          phone: fields['phone']?.toString() ?? '',
+          name: fields['name']?.toString() ?? '',
+          createdAt: fields['created_at'] != null ? (fields['created_at'] is DateTime ? fields['created_at'] as DateTime : DateTime.parse(fields['created_at'].toString())) : null,
+          updatedAt: fields['updated_at'] != null ? (fields['updated_at'] is DateTime ? fields['updated_at'] as DateTime : DateTime.parse(fields['updated_at'].toString())) : null,
         );
 
         if (rememberMe) {

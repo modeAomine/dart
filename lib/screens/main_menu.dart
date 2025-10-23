@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:trash_removal_app/screens/about_screen.dart';
 import 'package:trash_removal_app/screens/profile/profile_screen.dart';
+import 'package:trash_removal_app/screens/work_screen.dart';
 import '../services/auth_service.dart';
 import '../theme/colors.dart';
 import '../theme/text_styles.dart';
@@ -84,9 +86,15 @@ class MainMenu extends StatelessWidget {
           ),
           SizedBox(height: 16),
           _buildMenuButton(
+            icon: Icons.receipt_long,
+            title: 'Работать',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => WorkScreen())),
+          ),
+          SizedBox(height: 16),
+          _buildMenuButton(
             icon: Icons.info,
             title: 'О приложении',
-            onTap: () {},
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AboutScreen())),
           ),
           SizedBox(height: 32),
           ElevatedButton(

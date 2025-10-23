@@ -334,24 +334,42 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
 
     setState(() {
       isLoading = true;
+      selectedPoint = point;
+      selectedAddress = 'Определяем адрес...';
+      _updateMapMarker(point);
     });
 
     try {
-      final address = await YandexGeocoderService.reverseGeocode(
+      print('🎯 Map tapped at: ${point.latitude}, ${point.longitude}');
+
+      // Пробуем основной метод
+      var address = await YandexGeocoderService.reverseGeocode(
         point.latitude,
         point.longitude,
       );
 
+      // Если основной метод не сработал, пробуем альтернативный
+      if (address == null || address['full_address'] == null) {
+        print('🔄 Trying alternative geocoding method...');
+        address = await YandexGeocoderService.reverseGeocodeAlternative(
+          point.latitude,
+          point.longitude,
+        );
+      }
+
+      final finalAddress = address?['full_address'] ??
+          address?['address'] ??
+          'Координаты: ${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}';
+
       setState(() {
-        selectedPoint = point;
-        selectedAddress = address?['address'] ?? '${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}';
-        _updateMapMarker(point);
+        selectedAddress = finalAddress;
+        print('✅ Final address set to: $selectedAddress');
       });
+
     } catch (e) {
+      print('❌ Map tap error: $e');
       setState(() {
-        selectedPoint = point;
-        selectedAddress = '${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}';
-        _updateMapMarker(point);
+        selectedAddress = 'Координаты: ${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}';
       });
     } finally {
       setState(() {
@@ -447,7 +465,12 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
   }
 
   void _confirmAddress() {
+    print('🎯 Confirm address called');
+    print('📍 Selected point: $selectedPoint');
+    print('🏠 Selected address: $selectedAddress');
+
     if (selectedPoint != null && selectedAddress != null) {
+      print('✅ Address confirmed: $selectedAddress');
       widget.onAddressSelected(
         selectedPoint!.latitude,
         selectedPoint!.longitude,
@@ -455,6 +478,7 @@ class _YandexMapAddressScreenState extends State<YandexMapAddressScreen> {
       );
       Navigator.pop(context);
     } else {
+      print('❌ Address not selected properly');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Пожалуйста, выберите адрес на карте')),
       );

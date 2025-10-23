@@ -19,9 +19,10 @@ class ProfileScreen extends StatelessWidget {
     final addressService = Provider.of<AddressService>(context);
     final user = authService.currentUser;
 
-    if (user != null && addressService.addresses.isEmpty && !addressService.isLoading) {
+    // ФИКС: проверяем что user не null и имеет id перед загрузкой адресов
+    if (user != null && user.id != null && addressService.addresses.isEmpty && !addressService.isLoading) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        addressService.loadUserAddresses(user.id);
+        addressService.loadUserAddresses(user.id!);
       });
     }
 
@@ -41,7 +42,8 @@ class ProfileScreen extends StatelessWidget {
           children: [
             _buildUserCard(user),
             SizedBox(height: 24),
-            _buildAddressesSection(context, addressService, user.id),
+            // ФИКС: передаем userId только если он есть
+            if (user.id != null) _buildAddressesSection(context, addressService, user.id!),
           ],
         ),
       ),
@@ -88,7 +90,10 @@ class ProfileScreen extends StatelessWidget {
                 Text('Зарегистрирован:', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.secondary)),
                 Spacer(),
                 Text(
-                  '${user.createdAt.day.toString().padLeft(2, '0')}.${user.createdAt.month.toString().padLeft(2, '0')}.${user.createdAt.year}',
+                  // ФИКС: проверяем createdAt на null
+                  user.createdAt != null
+                      ? '${user.createdAt!.day.toString().padLeft(2, '0')}.${user.createdAt!.month.toString().padLeft(2, '0')}.${user.createdAt!.year}'
+                      : 'Не указано',
                   style: AppTextStyles.bodyMedium,
                 ),
               ],
@@ -197,7 +202,8 @@ class ProfileScreen extends StatelessWidget {
             Text(address.addressText, style: AppTextStyles.bodyMedium),
             SizedBox(height: 8),
             Text(
-              'Добавлен: ${address.createdAt.day.toString().padLeft(2, '0')}.${address.createdAt.month.toString().padLeft(2, '0')}.${address.createdAt.year}',
+              // ФИКС: проверяем createdAt на null
+              'Добавлен: ${address.createdAt != null ? '${address.createdAt!.day.toString().padLeft(2, '0')}.${address.createdAt!.month.toString().padLeft(2, '0')}.${address.createdAt!.year}' : 'Не указано'}',
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.secondary),
             ),
           ],
@@ -207,6 +213,12 @@ class ProfileScreen extends StatelessWidget {
   }
 
   void _showDeleteDialog(BuildContext context, Address address, AddressService addressService, String userId) {
+    // ФИКС: проверяем что у адреса есть id перед удалением
+    if (address.id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: адрес не имеет ID')));
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -217,7 +229,7 @@ class ProfileScreen extends StatelessWidget {
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              final success = await addressService.deleteAddress(address.id, userId);
+              final success = await addressService.deleteAddress(address.id!, userId);
               if (success) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Адрес удален')));
               } else {

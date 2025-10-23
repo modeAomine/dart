@@ -1,19 +1,18 @@
-import 'package:postgres/postgres.dart';
+import 'package:mysql1/mysql1.dart';
+import 'config.dart';
 
 class DatabaseService {
-  static PostgreSQLConnection? _connection;
+  static MySqlConnection? _connection;
   static bool _isInitialized = false;
   static int _retryCount = 0;
   static const int _maxRetries = 3;
   static DateTime? _lastConnectionCheck;
 
-  static Future<PostgreSQLConnection> get connection async {
-    // Проверяем, нужно ли переподключение
-    if (_connection == null || _connection!.isClosed || !_isInitialized) {
+  static Future<MySqlConnection> get connection async {
+    if (_connection == null || !_isInitialized) {
       await _reconnect();
     }
 
-    // Периодически проверяем живое ли соединение
     if (_shouldCheckConnection()) {
       final isAlive = await _checkConnectionHealth();
       if (!isAlive) {
@@ -35,7 +34,6 @@ class DatabaseService {
       _lastConnectionCheck = DateTime.now();
       return true;
     } catch (e) {
-      print('⚠️ Проверка соединения: соединение неактивно');
       return false;
     }
   }
@@ -48,10 +46,14 @@ class DatabaseService {
 
   static Future<void> initialize() async {
     try {
-      print('🔄 Пытаемся подключиться к PostgreSQL...');
+      print('🎯 Пытаемся подключиться к MySQL...');
+      print('🎯 Host: ${Config.dbHost}');
+      print('🎯 Port: ${Config.dbPort}');
+      print('🎯 DB: ${Config.dbName}');
+      print('🎯 User: ${Config.dbUser}');
 
-      final hosts = ['localhost', '10.0.2.2', '127.0.0.1'];
-      Exception? lastException;
+      final hosts = [Config.dbHost];
+      dynamic lastException;
 
       for (final host in hosts) {
         try {
@@ -61,28 +63,28 @@ class DatabaseService {
 
           print('🔄 Попытка ${_retryCount + 1}/$_maxRetries - подключение к $host...');
 
-          _connection = PostgreSQLConnection(
-            host,
-            5432,
-            'dart',
-            username: 'postgres',
-            password: '1234',
-            timeoutInSeconds: 10,
-            queryTimeoutInSeconds: 15,
+          final settings = ConnectionSettings(
+            host: host,
+            port: Config.dbPort,
+            user: Config.dbUser,
+            password: Config.dbPass,
+            db: Config.dbName,
+            timeout: Duration(seconds: 10),
           );
 
-          await _connection!.open();
+          _connection = await MySqlConnection.connect(settings);
           _isInitialized = true;
           _retryCount = 0;
           _lastConnectionCheck = DateTime.now();
 
-          print('✅ База данных подключена к $host');
+          print('✅ Успешно подключились к MySQL на $host');
+          await _checkDatabaseStructure();
           return;
 
         } catch (e) {
           _retryCount++;
-          lastException = e as Exception?;
-          print('❌ Не удалось подключиться к $host: $e');
+          lastException = e;
+          print('❌ Ошибка подключения к $host: $e');
           await _connection?.close();
           _connection = null;
 
@@ -92,16 +94,86 @@ class DatabaseService {
         }
       }
 
-      throw lastException ?? Exception('Не удалось подключиться к PostgreSQL');
-
+      throw lastException is Exception ? lastException : Exception('Не удалось подключиться к MySQL');
     } catch (e) {
-      print('❌ Критическая ошибка подключения к базе данных: $e');
       _isInitialized = false;
       rethrow;
     }
   }
 
-  // ✅ ДОБАВЛЕНО: Метод для безопасной проверки доступности БД
+  static Future<void> _checkDatabaseStructure() async {
+    try {
+      final conn = await connection;
+      final tablesResult = await conn.query("SHOW TABLES LIKE 'users'");
+
+      if (tablesResult.isEmpty) {
+        print('🔄 Создаем структуру БД...');
+        await _createDatabaseStructure();
+      } else {
+        print('✅ Структура БД проверена');
+      }
+    } catch (e) {
+      print('⚠️ Ошибка проверки структуры БД: $e');
+    }
+  }
+
+  static Future<void> _createDatabaseStructure() async {
+    try {
+      final conn = await connection;
+
+      await conn.query('''
+        CREATE TABLE IF NOT EXISTS users (
+          id VARCHAR(36) PRIMARY KEY,
+          phone VARCHAR(15) NOT NULL UNIQUE,
+          name VARCHAR(100) NOT NULL,
+          password_hash VARCHAR(255) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      ''');
+
+      await conn.query('''
+        CREATE TABLE IF NOT EXISTS addresses (
+          id VARCHAR(36) PRIMARY KEY,
+          user_id VARCHAR(36) NOT NULL,
+          title VARCHAR(100) NOT NULL,
+          latitude DECIMAL(10, 8) NOT NULL,
+          longitude DECIMAL(11, 8) NOT NULL,
+          address_text TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          INDEX idx_user_id (user_id)
+        )
+      ''');
+
+      await conn.query('''
+        CREATE TABLE IF NOT EXISTS orders (
+          id VARCHAR(36) PRIMARY KEY,
+          user_id VARCHAR(36) NOT NULL,
+          address_id VARCHAR(36) NOT NULL,
+          order_date DATETIME NOT NULL,
+          pickup_time DATETIME NOT NULL,
+          bag_count INT NOT NULL DEFAULT 1,
+          total_price DECIMAL(10, 2) NOT NULL,
+          status ENUM('pending', 'accepted', 'in_progress', 'completed', 'cancelled') DEFAULT 'pending',
+          comment TEXT,
+          promo_code VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (address_id) REFERENCES addresses(id) ON DELETE CASCADE,
+          INDEX idx_user_id (user_id),
+          INDEX idx_status (status)
+        )
+      ''');
+
+      print('✅ Структура БД создана успешно');
+    } catch (e) {
+      print('❌ Ошибка создания структуры БД: $e');
+      rethrow;
+    }
+  }
+
   static Future<bool> get isAvailable async {
     try {
       final conn = await connection;
@@ -112,38 +184,11 @@ class DatabaseService {
     }
   }
 
-  static Future<bool> testConnection() async {
-    try {
-      final conn = await connection;
-      final result = await conn.query('SELECT 1');
-      return result.isNotEmpty;
-    } catch (e) {
-      print('❌ Ошибка тестирования подключения: $e');
-      return false;
-    }
-  }
-
-  static Future<bool> isConnectionAlive() async {
-    try {
-      if (_connection == null || _connection!.isClosed) {
-        return false;
-      }
-      await _connection!.query('SELECT 1');
-      _lastConnectionCheck = DateTime.now();
-      return true;
-    } catch (e) {
-      print('⚠️ Соединение неактивно: $e');
-      _isInitialized = false;
-      return false;
-    }
-  }
-
   static Future<void> close() async {
     await _connection?.close();
     _isInitialized = false;
     _connection = null;
     _retryCount = 0;
     _lastConnectionCheck = null;
-    print('✅ Подключение к БД закрыто');
   }
 }

@@ -3,7 +3,6 @@ import 'database_service.dart';
 
 class RegistrationService with ChangeNotifier {
   bool _isLoading = false;
-
   bool get isLoading => _isLoading;
 
   Future<bool> registerUser(String phone, String password, String name) async {
@@ -14,8 +13,8 @@ class RegistrationService with ChangeNotifier {
       final connection = await DatabaseService.connection;
 
       final checkResult = await connection.query(
-        'SELECT id FROM users WHERE phone = @phone',
-        substitutionValues: {'phone': phone},
+          'SELECT id FROM users WHERE phone = ?',
+          [phone]
       );
 
       if (checkResult.isNotEmpty) {
@@ -24,30 +23,26 @@ class RegistrationService with ChangeNotifier {
         return false;
       }
 
-      final result = await connection.query(
-        'INSERT INTO users (phone, name, password_hash) VALUES (@phone, @name, @password) RETURNING id, created_at',
-        substitutionValues: {
-          'phone': phone,
-          'name': name,
-          'password': _hashPassword(password),
-        },
+      final userId = _generateUserId();
+
+      await connection.query(
+          'INSERT INTO users (id, phone, name, password_hash) VALUES (?, ?, ?, ?)',
+          [userId, phone, name, _hashPassword(password)]
       );
 
-      if (result.isNotEmpty) {
-        _isLoading = false;
-        notifyListeners();
-        return true;
-      } else {
-        _isLoading = false;
-        notifyListeners();
-        return false;
-      }
+      _isLoading = false;
+      notifyListeners();
+      return true;
+
     } catch (e) {
-      print('Ошибка регистрации: $e');
       _isLoading = false;
       notifyListeners();
       return false;
     }
+  }
+
+  String _generateUserId() {
+    return 'user_${DateTime.now().millisecondsSinceEpoch}';
   }
 
   String _hashPassword(String password) {
