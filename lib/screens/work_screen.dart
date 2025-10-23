@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:trash_removal_app/models/employee_application.dart';
 import 'package:trash_removal_app/models/job_position.dart';
 import 'package:trash_removal_app/services/employee_service.dart';
+import 'package:trash_removal_app/services/auth_service.dart';
 import 'package:trash_removal_app/theme/colors.dart';
 import 'package:trash_removal_app/theme/text_styles.dart';
 import 'package:trash_removal_app/theme/button_styles.dart';
@@ -11,7 +12,6 @@ import 'package:credit_card_validator/credit_card_validator.dart';
 import 'package:trash_removal_app/utils/input_masks.dart';
 import 'package:trash_removal_app/theme/input_styles.dart';
 import 'package:trash_removal_app/models/credit_card_brand.dart';
-
 
 class WorkScreen extends StatelessWidget {
   const WorkScreen({Key? key}) : super(key: key);
@@ -152,13 +152,16 @@ class WorkScreen extends StatelessWidget {
   }
 
   Widget _buildActionButtons(BuildContext context) {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final isLoggedIn = authService.currentUser != null;
+
     return Column(
       children: [
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
             style: AppButtonStyles.primaryButton,
-            onPressed: () => _startApplication(context),
+            onPressed: () => isLoggedIn ? _startApplication(context) : _showLoginRequired(context),
             child: Text('Оставить заявку'),
           ),
         ),
@@ -171,7 +174,38 @@ class WorkScreen extends StatelessWidget {
             child: Text('Узнать подробности'),
           ),
         ),
+        if (!isLoggedIn) ...[
+          SizedBox(height: 12),
+          Text(
+            'Для подачи заявки необходимо войти в систему',
+            style: AppTextStyles.bodySmall.copyWith(color: AppColors.secondary),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ],
+    );
+  }
+
+  void _showLoginRequired(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Требуется вход'),
+        content: Text('Для подачи заявки на работу необходимо войти в систему.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Отмена'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: Переход на экран входа
+            },
+            child: Text('Войти'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -289,6 +323,7 @@ class _ApplicationWizardState extends State<ApplicationWizard> {
   JobPosition? _selectedPosition;
   CreditCardBrand? _detectedBrand;
   final CreditCardValidator _validator = CreditCardValidator();
+  bool _isSubmitting = false;
 
   final TextEditingController _passportSeriesController = TextEditingController();
   final TextEditingController _passportNumberController = TextEditingController();
@@ -724,7 +759,7 @@ class _ApplicationWizardState extends State<ApplicationWizard> {
           Expanded(
             child: ElevatedButton(
               style: AppButtonStyles.secondaryButton,
-              onPressed: () => setState(() => _currentStep--),
+              onPressed: _isSubmitting ? null : () => setState(() => _currentStep--),
               child: Text('Назад'),
             ),
           ),
@@ -732,27 +767,110 @@ class _ApplicationWizardState extends State<ApplicationWizard> {
         Expanded(
           child: ElevatedButton(
             style: AppButtonStyles.primaryButton,
-            onPressed: _currentStep < 4 ? () => setState(() => _currentStep++) : _submitApplication,
-            child: Text(_currentStep < 4 ? 'Далее' : 'Отправить'),
+            onPressed: _isSubmitting
+                ? null
+                : _currentStep < 4
+                ? () => setState(() => _currentStep++)
+                : _submitApplication,
+            child: _isSubmitting
+                ? SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            )
+                : Text(_currentStep < 4 ? 'Далее' : 'Отправить'),
           ),
         ),
       ],
     );
   }
 
-  void _submitApplication() {
-    print('Отправка заявки на должность: $_selectedPosition');
-    print('Паспорт: ${_passportSeriesController.text} ${_passportNumberController.text}');
-    print('Банк: ${_bankNameController.text}');
+  Future<void> _submitApplication() async {
+    if (_selectedPosition == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Пожалуйста, выберите должность'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
 
-    Navigator.pop(context);
+    setState(() {
+      _isSubmitting = true;
+    });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Заявка успешно отправлена!'),
-        backgroundColor: AppColors.success,
-        duration: Duration(seconds: 3),
-      ),
-    );
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final employeeService = Provider.of<EmployeeService>(context, listen: false);
+
+      final currentUser = authService.currentUser;
+      if (currentUser == null) {
+        throw Exception('Пользователь не авторизован');
+      }
+
+      // Парсим дату выдачи паспорта
+      DateTime? passportIssueDate;
+      try {
+        final parts = _passportIssueDateController.text.split('.');
+        if (parts.length == 3) {
+          passportIssueDate = DateTime(
+            int.parse(parts[2]),
+            int.parse(parts[1]),
+            int.parse(parts[0]),
+          );
+        }
+      } catch (e) {
+        print('Ошибка парсинга даты: $e');
+      }
+
+      final application = EmployeeApplication(
+        userId: currentUser.id!,
+        status: ApplicationStatus.submitted,
+        createdAt: DateTime.now(),
+        passportSeries: _passportSeriesController.text.isNotEmpty ? _passportSeriesController.text : null,
+        passportNumber: _passportNumberController.text.isNotEmpty ? _passportNumberController.text : null,
+        passportIssueDate: passportIssueDate,
+        passportIssuedBy: _passportIssuedByController.text.isNotEmpty ? _passportIssuedByController.text : null,
+        registrationAddress: _registrationAddressController.text.isNotEmpty ? _registrationAddressController.text : null,
+        bankName: _bankNameController.text.isNotEmpty ? _bankNameController.text : null,
+        bankAccount: _bankAccountController.text.isNotEmpty ? _bankAccountController.text : null,
+        bankCardNumber: _bankCardController.text.isNotEmpty ? _bankCardController.text : null,
+        desiredPosition: _selectedPosition!.title,
+        workExperience: _workExperienceController.text.isNotEmpty ? _workExperienceController.text : null,
+        additionalInfo: _additionalInfoController.text.isNotEmpty ? _additionalInfoController.text : null,
+      );
+
+      final success = await employeeService.saveApplication(application);
+
+      if (success) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Заявка успешно отправлена!'),
+            backgroundColor: AppColors.success,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      } else {
+        throw Exception('Не удалось сохранить заявку');
+      }
+    } catch (e) {
+      print('Ошибка при отправке заявки: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при отправке заявки. Попробуйте еще раз.'),
+          backgroundColor: AppColors.error,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      setState(() {
+        _isSubmitting = false;
+      });
+    }
   }
 }
