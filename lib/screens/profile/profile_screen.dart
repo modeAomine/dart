@@ -10,8 +10,36 @@ import '../../theme/button_styles.dart';
 import '../addresses/add_address_screen.dart';
 import '../../widgets/base_scaffold.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool _initialLoad = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (!_initialLoad) {
+      _initialLoad = true;
+      _loadAddresses();
+    }
+  }
+
+  void _loadAddresses() {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final addressService = Provider.of<AddressService>(context, listen: false);
+
+    if (authService.currentUser != null &&
+        addressService.addresses.isEmpty &&
+        !addressService.isLoading) {
+      addressService.loadUserAddresses();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,10 +47,10 @@ class ProfileScreen extends StatelessWidget {
     final addressService = Provider.of<AddressService>(context);
     final user = authService.currentUser;
 
-    // ФИКС: проверяем что user не null и имеет id перед загрузкой адресов
-    if (user != null && user.id != null && addressService.addresses.isEmpty && !addressService.isLoading) {
+    // Автоматическая загрузка адресов при появлении пользователя
+    if (user != null && addressService.addresses.isEmpty && !addressService.isLoading && _initialLoad) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        addressService.loadUserAddresses(user.id!);
+        addressService.loadUserAddresses();
       });
     }
 
@@ -42,8 +70,7 @@ class ProfileScreen extends StatelessWidget {
           children: [
             _buildUserCard(user),
             SizedBox(height: 24),
-            // ФИКС: передаем userId только если он есть
-            if (user.id != null) _buildAddressesSection(context, addressService, user.id!),
+            _buildAddressesSection(context, addressService, user),
           ],
         ),
       ),
@@ -74,7 +101,7 @@ class ProfileScreen extends StatelessWidget {
                     children: [
                       Text(user.name, style: AppTextStyles.headerMedium),
                       SizedBox(height: 4),
-                      Text('+7 ${user.phone}', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.secondary)),
+                      Text(user.email, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.secondary)),
                     ],
                   ),
                 ),
@@ -85,15 +112,12 @@ class ProfileScreen extends StatelessWidget {
             SizedBox(height: 12),
             Row(
               children: [
-                Icon(Icons.calendar_today, size: 20, color: AppColors.primary),
+                Icon(Icons.person_pin, size: 20, color: AppColors.primary),
                 SizedBox(width: 12),
-                Text('Зарегистрирован:', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.secondary)),
+                Text('ID пользователя:', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.secondary)),
                 Spacer(),
                 Text(
-                  // ФИКС: проверяем createdAt на null
-                  user.createdAt != null
-                      ? '${user.createdAt!.day.toString().padLeft(2, '0')}.${user.createdAt!.month.toString().padLeft(2, '0')}.${user.createdAt!.year}'
-                      : 'Не указано',
+                  user.id ?? 'Не указан',
                   style: AppTextStyles.bodyMedium,
                 ),
               ],
@@ -104,7 +128,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAddressesSection(BuildContext context, AddressService addressService, String userId) {
+  Widget _buildAddressesSection(BuildContext context, AddressService addressService, User user) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -126,14 +150,17 @@ class ProfileScreen extends StatelessWidget {
             else if (addressService.addresses.isEmpty)
               _buildEmptyAddresses()
             else
-              _buildAddressesList(context, addressService, userId),
+              _buildAddressesList(context, addressService),
             SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
                 style: AppButtonStyles.primaryButton,
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddAddressScreen(userId: userId))),
+                onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => AddAddressScreen(userId: user.id.toString()))
+                ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -166,19 +193,19 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAddressesList(BuildContext context, AddressService addressService, String userId) {
+  Widget _buildAddressesList(BuildContext context, AddressService addressService) {
     return ListView.builder(
       shrinkWrap: true,
       physics: NeverScrollableScrollPhysics(),
       itemCount: addressService.addresses.length,
       itemBuilder: (context, index) {
         final address = addressService.addresses[index];
-        return _buildAddressCard(context, address, addressService, userId);
+        return _buildAddressCard(context, address, addressService);
       },
     );
   }
 
-  Widget _buildAddressCard(BuildContext context, Address address, AddressService addressService, String userId) {
+  Widget _buildAddressCard(BuildContext context, Address address, AddressService addressService) {
     return Card(
       margin: EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -194,26 +221,19 @@ class ProfileScreen extends StatelessWidget {
                 Expanded(child: Text(address.title, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600))),
                 IconButton(
                   icon: Icon(Icons.delete, size: 20, color: AppColors.error),
-                  onPressed: () => _showDeleteDialog(context, address, addressService, userId),
+                  onPressed: () => _showDeleteDialog(context, address, addressService),
                 ),
               ],
             ),
             SizedBox(height: 8),
             Text(address.addressText, style: AppTextStyles.bodyMedium),
-            SizedBox(height: 8),
-            Text(
-              // ФИКС: проверяем createdAt на null
-              'Добавлен: ${address.createdAt != null ? '${address.createdAt!.day.toString().padLeft(2, '0')}.${address.createdAt!.month.toString().padLeft(2, '0')}.${address.createdAt!.year}' : 'Не указано'}',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.secondary),
-            ),
           ],
         ),
       ),
     );
   }
 
-  void _showDeleteDialog(BuildContext context, Address address, AddressService addressService, String userId) {
-    // ФИКС: проверяем что у адреса есть id перед удалением
+  void _showDeleteDialog(BuildContext context, Address address, AddressService addressService) {
     if (address.id == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: адрес не имеет ID')));
       return;
@@ -229,10 +249,10 @@ class ProfileScreen extends StatelessWidget {
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              final success = await addressService.deleteAddress(address.id!, userId);
-              if (success) {
+              final success = await addressService.deleteAddress(address.id!);
+              if (success && context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Адрес удален')));
-              } else {
+              } else if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка при удалении адреса')));
               }
             },

@@ -7,7 +7,6 @@ class Address extends Equatable {
   final double latitude;
   final double longitude;
   final String addressText;
-  final DateTime? createdAt;
 
   Address({
     this.id,
@@ -16,7 +15,6 @@ class Address extends Equatable {
     required this.latitude,
     required this.longitude,
     required this.addressText,
-    this.createdAt,
   }) {
     if (title.isEmpty) throw ArgumentError('Название адреса не может быть пустым');
     if (latitude < -90 || latitude > 90) throw ArgumentError('Широта должна быть между -90 и 90');
@@ -25,14 +23,16 @@ class Address extends Equatable {
   }
 
   factory Address.fromJson(Map<String, dynamic> json) {
+    final id = json['id']?.toString();
+    final userId = json['user_id']?.toString(); // ВОЗВРАЩАЕМ
+
     return Address(
-      id: json['id'] as String?,
-      userId: json['user_id'] as String?,
+      id: id,
+      userId: userId,
       title: json['title'] as String,
       latitude: _parseDouble(json['latitude']),
       longitude: _parseDouble(json['longitude']),
       addressText: json['address_text'] as String,
-      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'] as String) : null,
     );
   }
 
@@ -46,12 +46,11 @@ class Address extends Equatable {
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
-      if (userId != null) 'user_id': userId,
+      if (userId != null) 'user_id': userId, // ВОЗВРАЩАЕМ
       'title': title,
       'latitude': latitude,
       'longitude': longitude,
       'address_text': addressText,
-      if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
     };
   }
 
@@ -62,7 +61,6 @@ class Address extends Equatable {
     double? latitude,
     double? longitude,
     String? addressText,
-    DateTime? createdAt,
   }) {
     return Address(
       id: id ?? this.id,
@@ -71,12 +69,11 @@ class Address extends Equatable {
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       addressText: addressText ?? this.addressText,
-      createdAt: createdAt ?? this.createdAt,
     );
   }
 
   bool get isPersisted => id != null;
 
   @override
-  List<Object?> get props => [id, userId, title, latitude, longitude, addressText, createdAt];
+  List<Object?> get props => [id, userId, title, latitude, longitude, addressText];
 }

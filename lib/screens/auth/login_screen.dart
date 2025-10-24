@@ -6,8 +6,6 @@ import '../../theme/colors.dart';
 import '../../theme/text_styles.dart';
 import '../../theme/button_styles.dart';
 import '../../theme/input_styles.dart';
-import '../../utils/phone_formatter.dart';
-import '../../widgets/phone_text_field.dart';
 import '../../widgets/base_scaffold.dart';
 import '../main_menu.dart';
 
@@ -17,7 +15,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _rememberMe = false;
@@ -83,7 +81,20 @@ class _LoginScreenState extends State<LoginScreen> {
       key: _formKey,
       child: Column(
         children: [
-          PhoneTextField(controller: _phoneController, labelText: 'Номер телефона'),
+          TextFormField(
+            controller: _emailController,
+            decoration: AppInputStyles.textField(
+              labelText: 'Email',
+              hintText: 'example@mail.ru',
+              prefixIcon: Icon(Icons.email, color: AppColors.primary),
+            ),
+            keyboardType: TextInputType.emailAddress,
+            validator: (value) {
+              if (value == null || value.isEmpty) return 'Введите email';
+              if (!_isValidEmail(value)) return 'Введите корректный email';
+              return null;
+            },
+          ),
           SizedBox(height: 20),
           TextFormField(
             controller: _passwordController,
@@ -127,12 +138,15 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  bool _isValidEmail(String email) {
+    final regex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+    return regex.hasMatch(email);
+  }
+
   Future<void> _performLogin(BuildContext context, AuthService authService) async {
     if (_formKey.currentState!.validate()) {
-      final cleanPhone = PhoneFormatter.cleanPhone(_phoneController.text);
-
-      final success = await authService.loginWithPhone(
-        cleanPhone.substring(1),
+      final success = await authService.loginWithEmail(
+        _emailController.text.trim(),
         _passwordController.text,
         rememberMe: _rememberMe,
       );
@@ -154,7 +168,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _phoneController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }

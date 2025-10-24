@@ -20,9 +20,15 @@ enum ErrorType {
 class ErrorHandler {
   static AppError handleError(dynamic error) {
     print('🔴 Обработка ошибки: $error');
+    print('🔴 Тип ошибки: ${error.runtimeType}');
 
     if (error is AppError) {
       return error;
+    }
+
+    // ФИКС: Обрабатываем FormatException (пустой JSON)
+    if (error is FormatException) {
+      return AppError('Сервер вернул некорректный ответ. Попробуйте позже.', type: ErrorType.server);
     }
 
     final errorString = error.toString().toLowerCase();
@@ -64,7 +70,7 @@ class ErrorHandler {
       case ErrorType.validation:
         return 'Проверьте правильность введенных данных';
       case ErrorType.server:
-        return 'Внутренняя ошибка сервера';
+        return 'Сервер вернул некорректный ответ. Попробуйте позже.';
       case ErrorType.unknown:
         return 'Произошла непредвиденная ошибка';
     }

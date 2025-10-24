@@ -2,44 +2,42 @@ import 'package:equatable/equatable.dart';
 
 class User extends Equatable {
   final String? id;
-  final String phone;
-  String name;
-  final DateTime? createdAt;
-  final DateTime? updatedAt;
+  final String email;
+  final String name;
+  final String? phone;
 
   User({
     this.id,
-    required this.phone,
+    required this.email,
     required this.name,
-    this.createdAt,
-    this.updatedAt,
+    this.phone,
   }) {
-    if (!_isValidPhone(phone)) throw ArgumentError('Неверный формат телефона');
     if (name.isEmpty) throw ArgumentError('Имя не может быть пустым');
+    if (!_isValidEmail(email)) throw ArgumentError('Неверный формат email');
   }
 
-  static bool _isValidPhone(String phone) {
-    final regex = RegExp(r'^\+?[0-9]{10,13}$');
-    return regex.hasMatch(phone.replaceAll(RegExp(r'\s+'), ''));
+  static bool _isValidEmail(String email) {
+    final regex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+    return regex.hasMatch(email);
   }
 
   factory User.fromJson(Map<String, dynamic> json) {
+    final id = json['id']?.toString();
+
     return User(
-      id: json['id'] as String?,
-      phone: json['phone'] as String,
+      id: id,
+      email: json['email'] as String,
       name: json['name'] as String,
-      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'] as String) : null,
-      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at'] as String) : null,
+      phone: json['phone'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
-      'phone': phone,
+      'email': email,
       'name': name,
-      if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
-      if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
+      if (phone != null) 'phone': phone,
     };
   }
 
@@ -47,20 +45,18 @@ class User extends Equatable {
 
   User copyWith({
     String? id,
-    String? phone,
+    String? email,
     String? name,
-    DateTime? createdAt,
-    DateTime? updatedAt,
+    String? phone,
   }) {
     return User(
       id: id ?? this.id,
-      phone: phone ?? this.phone,
+      email: email ?? this.email,
       name: name ?? this.name,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
+      phone: phone ?? this.phone,
     );
   }
 
   @override
-  List<Object?> get props => [id, phone, name, createdAt, updatedAt];
+  List<Object?> get props => [id, email, name, phone];
 }

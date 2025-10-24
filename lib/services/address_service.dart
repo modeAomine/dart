@@ -1,6 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../models/address.dart';
-import 'database_service.dart';
+import 'api_service.dart';
 
 class AddressService with ChangeNotifier {
   List<Address> _addresses = [];
@@ -9,132 +10,80 @@ class AddressService with ChangeNotifier {
   List<Address> get addresses => _addresses;
   bool get isLoading => _isLoading;
 
-  Future<void> loadUserAddresses(String userId) async {
+  Future<bool> loadUserAddresses() async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final connection = await DatabaseService.connection;
+      final response = await ApiService.get('addresses');
 
-      final result = await connection.query('''
-        SELECT id, user_id, title, latitude, longitude, address_text, created_at
-        FROM addresses 
-        WHERE user_id = ?
-        ORDER BY created_at DESC
-      ''', [userId]);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        _addresses = (data as List).map((item) => Address.fromJson(item)).toList();
 
-      _addresses = result.map((row) {
-        final fields = row.fields;
-        return Address(
-          id: fields['id']?.toString(),
-          userId: fields['user_id']?.toString(),
-          title: fields['title']?.toString() ?? '',
-          latitude: _parseDouble(fields['latitude']),
-          longitude: _parseDouble(fields['longitude']),
-          addressText: fields['address_text']?.toString() ?? '',
-          createdAt: fields['created_at'] != null ? (fields['created_at'] is DateTime ? fields['created_at'] as DateTime : DateTime.parse(fields['created_at'].toString())) : null,
-        );
-      }).toList();
-
-      _isLoading = false;
-      notifyListeners();
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
     } catch (e) {
-      _isLoading = false;
-      notifyListeners();
-      rethrow;
+      print('Ошибка загрузки адресов: $e');
     }
-  }
 
-  static double _parseDouble(dynamic value) {
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) return double.parse(value);
-    if (value == null) throw FormatException('Значение не может быть null');
-    throw FormatException('Невозможно преобразовать $value в double');
+    _isLoading = false;
+    notifyListeners();
+    return false;
   }
 
   Future<bool> addAddress(Address address) async {
     try {
-      final connection = await DatabaseService.connection;
+      final response = await ApiService.post('addresses', {
+        'title': address.title,
+        'address_text': address.addressText,
+        'latitude': address.latitude,
+        'longitude': address.longitude,
+      });
 
-      if (address.userId == null) {
-        throw ArgumentError('User ID не может быть null при добавлении адреса');
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        await loadUserAddresses();
+        return true;
       }
-
-      await connection.query('''
-        INSERT INTO addresses (
-          user_id, title, latitude, longitude, address_text
-        ) VALUES (
-          ?, ?, ?, ?, ?
-        )
-      ''', [
-        address.userId!,
-        address.title,
-        address.latitude,
-        address.longitude,
-        address.addressText,
-      ]);
-
-      await loadUserAddresses(address.userId!);
-      return true;
     } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при добавлении адреса: $e');
-      }
-      return false;
+      print('Ошибка добавления адреса: $e');
     }
-  }
-
-  Future<bool> deleteAddress(String addressId, String userId) async {
-    try {
-      final connection = await DatabaseService.connection;
-
-      await connection.query(
-        'DELETE FROM addresses WHERE id = ?',
-        [addressId],
-      );
-
-      await loadUserAddresses(userId);
-      return true;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при удалении адреса: $e');
-      }
-      return false;
-    }
+    return false;
   }
 
   Future<bool> updateAddress(Address address) async {
     try {
-      final connection = await DatabaseService.connection;
+      if (address.id == null) return false;
 
-      if (address.id == null) {
-        throw ArgumentError('Address ID не может быть null при обновлении');
+      final response = await ApiService.put('addresses/${address.id}', {
+        'title': address.title,
+        'address_text': address.addressText,
+      });
+
+      if (response.statusCode == 200) {
+        await loadUserAddresses();
+        return true;
       }
-
-      await connection.query('''
-        UPDATE addresses 
-        SET title = ?, latitude = ?, longitude = ?, address_text = ?
-        WHERE id = ?
-      ''', [
-        address.title,
-        address.latitude,
-        address.longitude,
-        address.addressText,
-        address.id!,
-      ]);
-
-      if (address.userId != null) {
-        await loadUserAddresses(address.userId!);
-      }
-
-      return true;
     } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при обновлении адреса: $e');
-      }
-      return false;
+      print('Ошибка обновления адреса: $e');
     }
+    return false;
+  }
+
+  Future<bool> deleteAddress(String addressId) async {
+    try {
+      final response = await ApiService.delete('addresses/$addressId');
+
+      if (response.statusCode == 200) {
+        await loadUserAddresses();
+        return true;
+      }
+    } catch (e) {
+      print('Ошибка удаления адреса: $e');
+    }
+    return false;
   }
 
   Address? findAddressById(String? addressId) {

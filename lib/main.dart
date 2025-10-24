@@ -7,33 +7,22 @@ import 'package:trash_removal_app/screens/profile/profile_screen.dart';
 import 'package:trash_removal_app/screens/about_screen.dart';
 import 'package:trash_removal_app/screens/work_screen.dart';
 import 'services/auth_service.dart';
-import 'services/registration_service.dart';
 import 'services/address_service.dart';
+import 'services/order_service.dart';
 import 'services/network_service.dart';
 import 'screens/splash/splash_screen.dart';
 import 'theme/colors.dart';
-import 'services/config.dart';
-import 'services/database_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  await Config.load();
-
-  try {
-    await DatabaseService.initialize();
-    print('✅ DatabaseService инициализирован');
-  } catch (e) {
-    print('❌ Ошибка инициализации БД: $e');
-  }
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
-        ChangeNotifierProvider(create: (_) => RegistrationService()),
         ChangeNotifierProvider(create: (_) => AddressService()),
-        ChangeNotifierProvider(create: (_) => NetworkService()),
+        ChangeNotifierProvider(create: (_) => OrderService()),
+        ChangeNotifierProvider(create: (_) => NetworkService())
       ],
       child: MyApp(),
     ),

@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
-import '../../services/registration_service.dart';
 import '../../theme/colors.dart';
 import '../../theme/text_styles.dart';
 import '../../theme/button_styles.dart';
 import '../../theme/input_styles.dart';
-import '../../utils/phone_formatter.dart';
-import '../../widgets/phone_text_field.dart';
 import '../../widgets/base_scaffold.dart';
 import '../main_menu.dart';
 
@@ -17,7 +14,7 @@ class RegistrationScreen extends StatefulWidget {
 }
 
 class _RegistrationScreenState extends State<RegistrationScreen> {
-  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -26,10 +23,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
-    final registrationService = Provider.of<RegistrationService>(context);
 
     return BaseScaffold(
-      body: authService.isLoading || registrationService.isLoading
+      body: authService.isLoading
           ? Center(child: CircularProgressIndicator(color: AppColors.primary))
           : SingleChildScrollView(
         child: Padding(
@@ -39,7 +35,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               SizedBox(height: 60),
               _buildHeader(),
               SizedBox(height: 40),
-              _buildForm(context),
+              _buildForm(context, authService),
             ],
           ),
         ),
@@ -67,7 +63,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     );
   }
 
-  Widget _buildForm(BuildContext context) {
+  Widget _buildForm(BuildContext context, AuthService authService) {
     return Form(
       key: _formKey,
       child: Column(
@@ -81,7 +77,20 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             validator: (value) => value == null || value.isEmpty ? 'Введите имя' : null,
           ),
           SizedBox(height: 16),
-          PhoneTextField(controller: _phoneController, labelText: 'Номер телефона'),
+          TextFormField(
+            controller: _emailController,
+            decoration: AppInputStyles.textField(
+              labelText: 'Email',
+              hintText: 'example@mail.ru',
+              prefixIcon: Icon(Icons.email, color: AppColors.primary),
+            ),
+            keyboardType: TextInputType.emailAddress,
+            validator: (value) {
+              if (value == null || value.isEmpty) return 'Введите email';
+              if (!_isValidEmail(value)) return 'Введите корректный email';
+              return null;
+            },
+          ),
           SizedBox(height: 16),
           TextFormField(
             controller: _passwordController,
@@ -131,35 +140,35 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     );
   }
 
+  bool _isValidEmail(String email) {
+    final regex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+    return regex.hasMatch(email);
+  }
+
   Future<void> _performRegistration(BuildContext context) async {
     if (_formKey.currentState!.validate()) {
-      final registrationService = Provider.of<RegistrationService>(context, listen: false);
       final authService = Provider.of<AuthService>(context, listen: false);
 
-      final cleanPhone = PhoneFormatter.cleanPhone(_phoneController.text);
-
-      final success = await registrationService.registerUser(
-        cleanPhone.substring(1),
+      final success = await authService.registerWithEmail(
+        _emailController.text.trim(),
         _passwordController.text,
         _nameController.text,
       );
 
-      if (success) {
-        final loginSuccess = await authService.loginWithPhone(
-          cleanPhone.substring(1),
-          _passwordController.text,
-        );
-
-        if (loginSuccess) {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => MainMenu()));
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка автоматического входа'), backgroundColor: AppColors.error),
-          );
+      if (success && context.mounted) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => MainMenu()));
+      } else if (context.mounted) {
+        String errorMessage = 'Ошибка регистрации';
+        if (authService.lastError != null) {
+          errorMessage = authService.lastError!.message;
         }
-      } else {
+
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка регистрации. Возможно телефон уже занят'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: AppColors.error,
+            duration: Duration(seconds: 3),
+          ),
         );
       }
     }
@@ -167,7 +176,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   @override
   void dispose() {
-    _phoneController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
     _confirmPasswordController.dispose();

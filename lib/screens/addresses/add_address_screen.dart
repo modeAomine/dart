@@ -236,12 +236,10 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
 
       final address = Address(
         id: tempId,
-        userId: widget.userId,
         title: _titleController.text,
         latitude: _latitude,
         longitude: _longitude,
         addressText: _addressText,
-        createdAt: DateTime.now(),
       );
 
       final success = await addressService.addAddress(address);
